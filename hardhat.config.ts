@@ -1,6 +1,6 @@
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
-import "hardhat-gas-reporter"
+import "hardhat-gas-reporter";
 
 
 const config: HardhatUserConfig = {
@@ -22,7 +22,10 @@ const config: HardhatUserConfig = {
         chainId: 10,
       },
     },
-  }
+  },
+  gasReporter: {
+    enabled: true
+  },
 };
 
 export default config;
