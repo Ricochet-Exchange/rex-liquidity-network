@@ -5,15 +5,14 @@ pragma solidity 0.8.18;
 import "./external/gelato/AutomateTaskCreator.sol";
 
 // Uniswap Imports
-import "./external/uniswap/IUniswapV3Pool.sol";
-import "./external/uniswap/IUniswapV3Factory.sol";
 import "./external/uniswap/interfaces/ISwapRouter02.sol";
 import "./external/uniswap/interfaces/INonfungiblePositionManager.sol";
 
-interface IWETH {
-    function withdraw(uint256 wmaticAmount) external;
-    function balanceOf(address account) external view returns (uint256);
-}
+// WMATIC
+import "./external/wmatic/IWMATIC.sol";
+
+import "hardhat/console.sol";
+
 
 contract RicochetLiquidityNetwork is AutomateTaskCreator {
 
@@ -30,7 +29,7 @@ contract RicochetLiquidityNetwork is AutomateTaskCreator {
 
     uint256 public constant INTERVAL = 60; // The interval for gelato to check for execution
     uint128 public constant GELATO_FEE_SHARE = 1; // 1% of the collected fees go to Gelato
-    uint24 public constant UNISWAP_FEE = 500; // 0.5% Uniswap V3 Fee
+    uint24 public constant UNISWAP_FEE = 500; // 0.05% Uniswap V3 Fee
     address public constant WRAPPED_GAS_TOKEN =
         0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270; // WMATIC
     address public constant RICOCHET_TOKEN =
@@ -41,7 +40,7 @@ contract RicochetLiquidityNetwork is AutomateTaskCreator {
     uint256[] public uniswapNFTs;
     bytes32[] public compoundTaskIds;
 
-    event NFTDeposited(uint256 tokenId);
+    event NFTDeposited(uint256 tokenId, bytes32 taskId);
     event Compounded(uint256 tokenId, address token0, address token1, uint256 amount0, uint256 amount1);
     event SwappedForGelatoGas(address token, uint256 amount);
 
@@ -66,6 +65,7 @@ contract RicochetLiquidityNetwork is AutomateTaskCreator {
         bytes calldata /*data*/
     ) external returns (bytes4) {
         PositionState memory state;
+        bytes32 taskId;
 
         // Require that the sender is the Uniswap V3 NFT contract
         require(
@@ -79,6 +79,7 @@ contract RicochetLiquidityNetwork is AutomateTaskCreator {
         require(state.fee == UNISWAP_FEE, "!univ3 fee");
 
         // Approve Uniswap Router to spend token0 and token1
+        // TODO: Safe approve?
         IERC20(state.token0).approve(address(router), type(uint256).max);
         IERC20(state.token1).approve(address(router), type(uint256).max);
 
@@ -86,10 +87,11 @@ contract RicochetLiquidityNetwork is AutomateTaskCreator {
         uniswapNFTs.push(tokenId);
 
         // Create the Gelato Automate task for collectFees
-        _createCompoundTask(tokenId);
+        taskId = _createCompoundTask(tokenId);
+        compoundTaskIds.push(taskId);
 
         // Emit an event for the new NFT deposited
-        emit NFTDeposited(tokenId);
+        emit NFTDeposited(tokenId, taskId);
 
         return this.onERC721Received.selector;
     }
@@ -98,6 +100,16 @@ contract RicochetLiquidityNetwork is AutomateTaskCreator {
         uint256 tokensForGelato0;
         uint256 tokensForGelato1;
         PositionState memory state;
+
+        // Collect 1 wei worth of tokens so that `tokensOwed0` and `tokensOwed1` are updated
+        nonfungiblePositionManager.collect(
+            INonfungiblePositionManager.CollectParams({
+                tokenId: tokenId,
+                recipient: address(this),
+                amount0Max: 1,
+                amount1Max: 1
+            })
+        );
 
         // Get the Uniswap V3 NFT
         (, , state.token0, state.token1, , , , , , , state.tokensOwed0, state.tokensOwed1) = nonfungiblePositionManager.positions(tokenId);
@@ -167,11 +179,6 @@ contract RicochetLiquidityNetwork is AutomateTaskCreator {
             _swap(path, amount);
         }
         emit SwappedForGelatoGas(token, amount);
-
-        // Unwrap the wrapped gas token to get native gas tokens
-        IWETH(WRAPPED_GAS_TOKEN).withdraw(
-            IWETH(WRAPPED_GAS_TOKEN).balanceOf(address(this))
-        );
     }
 
     function _swap(bytes memory path, uint256 amount) internal {
@@ -189,6 +196,11 @@ contract RicochetLiquidityNetwork is AutomateTaskCreator {
     }
 
     function _payGelato() internal {
+        // Withdraw all available matic
+        IWMATIC(WRAPPED_GAS_TOKEN).withdraw(
+            IWMATIC(WRAPPED_GAS_TOKEN).balanceOf(address(this))
+        );
+
         // Get the fee details from Gelato Automate
         (uint256 fee, address feeToken) = _getFeeDetails();
 
@@ -199,6 +211,8 @@ contract RicochetLiquidityNetwork is AutomateTaskCreator {
         } else {
             return;
         }
+
+        // Any left over matic will get used to trigger the next autocompound
     }
 
     function _createCompoundTask(
@@ -214,4 +228,7 @@ contract RicochetLiquidityNetwork is AutomateTaskCreator {
         moduleData.args[0] = _timeModuleArg(block.timestamp, INTERVAL);
         taskId = _createTask(address(this), execData, moduleData, ETH);
     }
+
+    receive() external payable {}
+
 }
