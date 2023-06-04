@@ -18,10 +18,10 @@ contract RicochetLiquidityNetwork is AutomateTaskCreator {
 
 
     struct PositionState {
-        uint256 amount0;
-        uint256 amount1;
         uint256 tokensOwed0;
         uint256 tokensOwed1;
+        uint256 tokensForGelato0;
+        uint256 tokensForGelato1;
         address token0;
         address token1;
         uint24 fee;
@@ -97,8 +97,6 @@ contract RicochetLiquidityNetwork is AutomateTaskCreator {
     }
 
     function compound(uint256 tokenId) external {
-        uint256 tokensForGelato0;
-        uint256 tokensForGelato1;
         PositionState memory state;
 
         // Collect 1 wei worth of tokens so that `tokensOwed0` and `tokensOwed1` are updated
@@ -116,28 +114,26 @@ contract RicochetLiquidityNetwork is AutomateTaskCreator {
 
 
         // Check how much fees are owed on this position and compute the fees for Gelato
-        tokensForGelato0 = (state.tokensOwed0 * GELATO_FEE_SHARE) / 100;
-        tokensForGelato1 = (state.tokensOwed1 * GELATO_FEE_SHARE) / 100;
+        state.tokensForGelato0 = (state.tokensOwed0 * GELATO_FEE_SHARE) / 100;
+        state.tokensForGelato1 = (state.tokensOwed1 * GELATO_FEE_SHARE) / 100;
 
         // Collect the fees on this position to pay for gas
         nonfungiblePositionManager.collect(
             INonfungiblePositionManager.CollectParams({
                 tokenId: tokenId,
                 recipient: address(this),
-                amount0Max: uint128(tokensForGelato0),
-                amount1Max: uint128(tokensForGelato1)
+                amount0Max: uint128(state.tokensForGelato0),
+                amount1Max: uint128(state.tokensForGelato1)
             })
         );
 
         // There will be some token0 and token1 left over in the contract from last compounding
         // Tokens for Gelato is updated to use the full available balance of token0 and token1
-        tokensForGelato0 = IERC20(state.token0).balanceOf(address(this));
-        tokensForGelato1 = IERC20(state.token1).balanceOf(address(this));
+        state.tokensForGelato0 = IERC20(state.token0).balanceOf(address(this));
+        state.tokensForGelato1 = IERC20(state.token1).balanceOf(address(this));
 
         // Swap the balances to get native gas tokens
-        _swapForGas(state.token0, tokensForGelato0);
-        _swapForGas(state.token1, tokensForGelato1);
-        // Now have native gas tokens to pay for Gelato execution
+        _swapForGas(state);
 
         // Tranfers the NFT to SelfCompounder to perform the autocompound
         nonfungiblePositionManager.safeTransferFrom(
@@ -155,31 +151,64 @@ contract RicochetLiquidityNetwork is AutomateTaskCreator {
         _payGelato();
     }
 
-    function _swapForGas(address token, uint256 amount) internal {
+    function _swapForGas(PositionState memory state) internal {
         bytes memory path; // The path for the Uniswap
 
-        // If the token is the ricochet protocol token
-        if (token == RICOCHET_TOKEN) {
-            // Swap it directly for MATIC
+        if (state.token0 != RICOCHET_TOKEN) {
+            // Swap token0 for RICOCHET_TOKEN
             path = abi.encodePacked(
-                address(RICOCHET_TOKEN),
+                address(state.token0),
                 UNISWAP_FEE,
-                address(WRAPPED_GAS_TOKEN)
+                address(RICOCHET_TOKEN)
             );
-            _swap(path, amount);
+            _swap(path, state.tokensForGelato0);
         } else {
-            // Swap it through the Ricochet Protocol token
+            // Swap token1 for RICOCHET_TOKEN
             path = abi.encodePacked(
-                address(token),
+                address(state.token1),
                 UNISWAP_FEE,
-                address(RICOCHET_TOKEN),
-                UNISWAP_FEE,
-                address(WRAPPED_GAS_TOKEN)
+                address(RICOCHET_TOKEN)
             );
-            _swap(path, amount);
+            _swap(path, state.tokensForGelato1);
         }
-        emit SwappedForGelatoGas(token, amount);
+
+        // at this point, we have all RICOCHET_TOKEN, swap it for WMATIC
+        path = abi.encodePacked(
+            address(RICOCHET_TOKEN),
+            UNISWAP_FEE,
+            address(WRAPPED_GAS_TOKEN)
+        );
+        _swap(path, IERC20(RICOCHET_TOKEN).balanceOf(address(this)));
+
+        emit SwappedForGelatoGas(state.token0, state.tokensForGelato0);
+        emit SwappedForGelatoGas(state.token1, state.tokensForGelato1);
     }
+
+    // function __swapForGas(address token, uint256 amount) internal {
+    //     bytes memory path; // The path for the Uniswap
+
+    //     // If the token is the ricochet protocol token
+    //     if (token == RICOCHET_TOKEN) {
+    //         // Swap it directly for MATIC
+    //         path = abi.encodePacked(
+    //             address(RICOCHET_TOKEN),
+    //             UNISWAP_FEE,
+    //             address(WRAPPED_GAS_TOKEN)
+    //         );
+    //         _swap(path, amount);
+    //     } else {
+    //         // Swap it through the Ricochet Protocol token
+    //         path = abi.encodePacked(
+    //             address(token),
+    //             UNISWAP_FEE,
+    //             address(RICOCHET_TOKEN),
+    //             UNISWAP_FEE,
+    //             address(WRAPPED_GAS_TOKEN)
+    //         );
+    //         _swap(path, amount);
+    //     }
+    //     emit SwappedForGelatoGas(token, amount);
+    // }
 
     function _swap(bytes memory path, uint256 amount) internal {
         // Swap the token for the next token in the path
