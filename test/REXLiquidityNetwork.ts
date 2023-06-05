@@ -19,7 +19,7 @@ const ricUsdcLPId = "808249"; // This one has some fees to collect as of block 4
 const ricWmaticLPOwnerAddress = "0x14aD7D958ab2930863B68E7D98a7FDE6Ae4Cd12f";
 const ricWmaticLPId = "904234";
 
-describe("RicochetLiquidityNetwork", function () {
+describe("REXLiquidityNetwork", function () {
   let rexNet, nonfungiblePositionManager, ricUsdcLp, ricWmaticLp, gelatoNetwork, ops;
 
   async function impersonateAccount(account) {
@@ -38,9 +38,9 @@ describe("RicochetLiquidityNetwork", function () {
   }
 
   // Deploy the contracts using the fixture
-  async function deployRicochetLiquidityNetwork() {
-    const RicochetLiquidityNetwork = await ethers.getContractFactory("RicochetLiquidityNetwork");
-    rexNet = await RicochetLiquidityNetwork.deploy(
+  async function deployREXLiquidityNetwork() {
+    const REXLiquidityNetwork = await ethers.getContractFactory("REXLiquidityNetwork");
+    rexNet = await REXLiquidityNetwork.deploy(
       selfCompounderAddress,
       gelatoAutomateAddress,
       nonfungiblePositionManagerAddress,
@@ -65,7 +65,7 @@ describe("RicochetLiquidityNetwork", function () {
   }
 
   it("Should automatically compound fees", async function () {
-    const { rexNet, nonfungiblePositionManager, ricUsdcLp, gelatoNetwork, ops } = await loadFixture(deployRicochetLiquidityNetwork);
+    const { rexNet, nonfungiblePositionManager, ricUsdcLp, gelatoNetwork, ops } = await loadFixture(deployREXLiquidityNetwork);
 
     // Execute a small collect on the position to get the value for tokensOwed0 and tokensOwed1
     await nonfungiblePositionManager.connect(ricUsdcLp).collect({

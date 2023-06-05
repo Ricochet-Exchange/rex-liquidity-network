@@ -14,7 +14,7 @@ import "./external/wmatic/IWMATIC.sol";
 import "hardhat/console.sol";
 
 
-contract RicochetLiquidityNetwork is AutomateTaskCreator {
+contract REXLiquidityNetwork is AutomateTaskCreator {
 
 
     struct PositionState {
@@ -32,8 +32,8 @@ contract RicochetLiquidityNetwork is AutomateTaskCreator {
     uint24 public constant UNISWAP_FEE = 500; // 0.05% Uniswap V3 Fee
     address public constant WRAPPED_GAS_TOKEN =
         0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270; // WMATIC
-    address public constant RICOCHET_TOKEN =
-        0x263026E7e53DBFDce5ae55Ade22493f828922965; // Ricochet Protocol Token
+    address public constant REX_TOKEN =
+        0x263026E7e53DBFDce5ae55Ade22493f828922965; // REX Protocol Token
     INonfungiblePositionManager public nonfungiblePositionManager; // Uniswap V3 NFT Manager
     ISwapRouter02 public router; // UniswapV3 Router
     address public selfCompounder; // Revert Finance Self-Compounder
@@ -154,61 +154,35 @@ contract RicochetLiquidityNetwork is AutomateTaskCreator {
     function _swapForGas(PositionState memory state) internal {
         bytes memory path; // The path for the Uniswap
 
-        if (state.token0 != RICOCHET_TOKEN) {
-            // Swap token0 for RICOCHET_TOKEN
+        if (state.token0 != REX_TOKEN) {
+            // Swap token0 for REX_TOKEN
             path = abi.encodePacked(
                 address(state.token0),
                 UNISWAP_FEE,
-                address(RICOCHET_TOKEN)
+                address(REX_TOKEN)
             );
             _swap(path, state.tokensForGelato0);
         } else {
-            // Swap token1 for RICOCHET_TOKEN
+            // Swap token1 for REX_TOKEN
             path = abi.encodePacked(
                 address(state.token1),
                 UNISWAP_FEE,
-                address(RICOCHET_TOKEN)
+                address(REX_TOKEN)
             );
             _swap(path, state.tokensForGelato1);
         }
 
-        // at this point, we have all RICOCHET_TOKEN, swap it for WMATIC
+        // at this point, we have all REX_TOKEN, swap it for WMATIC
         path = abi.encodePacked(
-            address(RICOCHET_TOKEN),
+            address(REX_TOKEN),
             UNISWAP_FEE,
             address(WRAPPED_GAS_TOKEN)
         );
-        _swap(path, IERC20(RICOCHET_TOKEN).balanceOf(address(this)));
+        _swap(path, IERC20(REX_TOKEN).balanceOf(address(this)));
 
         emit SwappedForGelatoGas(state.token0, state.tokensForGelato0);
         emit SwappedForGelatoGas(state.token1, state.tokensForGelato1);
     }
-
-    // function __swapForGas(address token, uint256 amount) internal {
-    //     bytes memory path; // The path for the Uniswap
-
-    //     // If the token is the ricochet protocol token
-    //     if (token == RICOCHET_TOKEN) {
-    //         // Swap it directly for MATIC
-    //         path = abi.encodePacked(
-    //             address(RICOCHET_TOKEN),
-    //             UNISWAP_FEE,
-    //             address(WRAPPED_GAS_TOKEN)
-    //         );
-    //         _swap(path, amount);
-    //     } else {
-    //         // Swap it through the Ricochet Protocol token
-    //         path = abi.encodePacked(
-    //             address(token),
-    //             UNISWAP_FEE,
-    //             address(RICOCHET_TOKEN),
-    //             UNISWAP_FEE,
-    //             address(WRAPPED_GAS_TOKEN)
-    //         );
-    //         _swap(path, amount);
-    //     }
-    //     emit SwappedForGelatoGas(token, amount);
-    // }
 
     function _swap(bytes memory path, uint256 amount) internal {
         // Swap the token for the next token in the path
