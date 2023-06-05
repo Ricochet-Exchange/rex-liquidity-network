@@ -1,41 +1,14 @@
-# Ricochet Liquidity Network
-This repository is a Hardhat project that contains the smart contracts for the Ricochet Liquidity Network. 
 
-## Overview
-The Ricochet Liquidity Network is a collection of Uniswap V3 Liquidity Pool Positions that autocompound their fees to increase the liquidity overtime. This implementation is design to permenantly lock liquidity. In this way, Ricochet Liquidity Network serves as an immutable liquidity provider that can be used by other protocols.
+## What is REX Liquidity Network?
+The REX Liquidity Network is a collection of Uniswap V3 Liquidity Pool Positions that autocompound their fees to increase the liquidity overtime. This network is designed to permanently lock liquidity for the REX Protocol. In this way, REX Liquidity Network serves as an ownerless and immutable liquidity provider that can be used by REX Protocol and other protocols as well. 
+![rex-liquidity-network](./img/rex-liquidity-network.png)
 
-## Features
-1. Accepts Uniswap V3 Liquidity Pool Positions (NTFs) as deposits
-2. Automatically compounds fees back into pools using Gelato Automate and Revert Finance's SelfCompounder
-3. After 60 days without withdrawing LPs, the Uniswap V3 Liquidity Pool Positions can never be withdrawn
+## How it works
+Fees accumulate in the Uniswap V3 positions as they get used by traders, which will primarily be REX Protocol. Other traders will use these pools as well if there exists a path through the network that offers the best path to fulfill a trade. Gelato will execute the transaction to compound fees once enough accumulates such that 1% of the fees will cover the transaction fee. When compounding, the Uniswap V3 position NFT is transferred to Revert Finance’s SelfCompounder contract which performs the fee compounding operations. SelfCompounder will then transfer the NFT back to the REX Liquidity Network contract after the fees are compounded back into the position.
 
-## Protocol Specifications
+## Permenant Protocol Owned Liquidity
+The REX Liquidity Network is an ownerless and immutable contract that permanently locks liquidity to power the REX Protocol in perpetuity. Fees collected are automatically compounded back into the pools in the protocol using Gelato Network and Revert Finance’s SelfCompounder.
 
-### Dependancies
-- Uniswap V3 - Automated Market Maker used by the Ricochet Liquidity Network
-- Gelato Automate - Executes the transaction that auto-compounds Uniswap LP fees 
-- SelfCompounder - Revert Finance's contract that auto-compounds Uniswap LP fees
-
-### Variables
-- `uint256[] uniswapNFTs` - Array of Uniswap V3 NFTs that are deposited into the Ricochet Liquidity Network
-- `bytes32[] public collectTaskIds` - Array of Gelato Automate taskIds
-- `mapping(ISuperToken => uint) public tokens` - Mapping of user balances
-
-### Functions
-
-#### `onERC721Received(address to, address from, uint256 tokenId, bytes calldata data)`
-- Called when a Uniswap V3 NFT is deposited into the Ricochet Liquidity Network
-- Records the Uniswap V3 NFT in the `uniswapNFTs` array
-
-#### `compound(uint256 uinswapNFTId)`
-- Called by Gelato Automate to compounds fees from a Uniswap V3 NFT
-- Uses Revert Finance's SelfCompounder to compound fees
-
-#### `_createCollectFeesTask(uint256 tokenId)`
-- Creates a Gelato Automate task to collect fees from a Uniswap V3 NFT
-- Used by the `onERC721Received` function
-
-#### `_swapForGas(INonfungiblePositionManager.Position memory position)`
-- Swaps 1% of the collected fees for gas tokens (e.g. MATIC)
-- Will swap the fee token to RIC and then swap RIC to MATIC 
-- Assumes that all pools are using the same fee rate (e.g. 0.05%)
+## How it's used
+![rex-liquidity-network-usage](./img/rex-liquidity-network-usage.png)
+The REX Liquidity Network is used as the liquidity source for REX Markets. Swaps on REX Markets route through the REX token. As shown below, a swap from USDC to ETH would route though the REX token using the path `[USDC, REX, ETH]`. This ensures that the REX liquidity network collects the inescapable AMM fees paid by REX Markets. Anyone REX token holder can provide liquidity to the network by depositing into tokens into the liqudity pools that make up the network. Other protocols can also use the REX Liquidity Network as a liquidity source for their own protocols.
